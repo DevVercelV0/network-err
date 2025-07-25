@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- X-Frame-Options for allowing embedding from gemini.google.com -->
+    <!-- Note: This is primarily a server-side HTTP header. Meta tag support can be limited in browsers. -->
+    <meta http-equiv="X-Frame-Options" content="ALLOW-FROM https://gemini.google.com">
+    <title>Site Status</title>
+    <style>
+        /* General Body Styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f6f8fa; /* GitHub's light background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            color: #24292e; /* GitHub's default text color */
+        }
+        /* Main Error Container (for network issues) */
+        .error-container {
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 12px; /* Slightly less rounded, more like GitHub cards */
+            box-shadow: none; /* GitHub prefers flatter designs, no strong shadows */
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            border: 1px solid #e1e4e8; /* Subtle GitHub-like border */
+            position: relative;
+            overflow: hidden;
+            display: none; /* Hidden by default, shown by JS */
+        }
+        .error-content {
+            position: relative;
+            z-index: 1;
+        }
+        .icon-container {
+            margin-bottom: 20px; /* Space below the icon */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .icon-container svg {
+            width: 80px; /* Slightly larger icon for more detail */
+            height: 80px;
+            color: #586069; /* A more neutral gray, like a disconnected state */
+            fill: currentColor; /* Use currentColor for fill to inherit color */
+        }
+        .error-message {
+            font-size: 2.2rem; /* Slightly smaller for a more technical feel */
+            font-weight: 700; /* Bold */
+            color: #cb2431; /* GitHub's red for errors/issues */
+            margin-bottom: 15px; /* Reduced margin */
+            line-height: 1.2;
+            letter-spacing: normal;
+        }
+        .sub-message {
+            font-size: 1rem; /* Slightly smaller for detailed message */
+            color: #586069; /* GitHub's secondary text color */
+            margin-bottom: 30px;
+            font-weight: 400;
+        }
+        .diagnosis-link,
+        .cert-link { /* Combined styling for both links */
+            font-size: 0.9rem; /* Smaller text for the diagnosis link */
+            color: #0366d6; /* GitHub's link blue */
+            text-decoration: none; /* No underline by default */
+            margin-top: 15px; /* Space above the link */
+            display: block; /* Make it a block element for margin */
+        }
+        .diagnosis-link:hover,
+        .cert-link:hover {
+            text-decoration: underline; /* Underline on hover */
+        }
+        .reload-button {
+            background-color: #24292e; /* GitHub's dark gray for primary buttons */
+            color: #ffffff;
+            padding: 10px 20px; /* Standard button padding */
+            border-radius: 9999px; /* Pill shape */
+            font-size: 1rem; /* Standard button font size */
+            font-weight: 600;
+            border: 1px solid rgba(27,31,35,0.2); /* Subtle border for buttons */
+            cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+            box-shadow: none;
+            letter-spacing: normal;
+            margin-top: 25px; /* Space between link and button */
+        }
+        .reload-button:hover {
+            background-color: #2f363d; /* Slightly lighter on hover */
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Modal (Pop-up) Styling */
+        .modal-overlay {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be responsive */
+            max-width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            position: relative;
+            text-align: left; /* Align text within modal */
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: #24292e;
+        }
+        .close-button {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: #000;
+            text-decoration: none;
+        }
+        .modal-body p {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #586069;
+            margin-bottom: 10px;
+        }
+        .modal-body ul {
+            list-style-type: decimal; /* Numbered list */
+            padding-left: 20px;
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+        .modal-body li {
+            margin-bottom: 8px;
+        }
+        .modal-footer {
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            text-align: right;
+        }
+        .modal-footer button {
+            background-color: #24292e;
+            color: #ffffff;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .modal-footer button:hover {
+            background-color: #2f363d;
+        }
+
+        /* Embedding Forbidden Message Styling (Google Chrome-like) */
+        #embeddingForbidden {
+            display: none; /* Hidden by default */
+            flex-direction: column; /* Arrange content vertically */
+            align-items: center; /* Center items horizontally */
+            justify-content: center; /* Center items vertically */
+            min-height: 100vh; /* Take full height to center content */
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            color: #24292e; /* Default text color */
+            background-color: #f6f8fa; /* Same as body background */
+        }
+        #embeddingForbidden .forbidden-icon {
+            width: 64px; /* Smaller icon */
+            height: 64px;
+            margin-bottom: 15px;
+            color: #cb2431; /* Red for error */
+        }
+        #embeddingForbidden .error-code-text {
+            font-size: 0.9rem; /* Small error code */
+            color: #586069; /* Grey like a subtle hint */
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        #embeddingForbidden .main-message-text {
+            font-size: 1.8rem; /* Main message font size */
+            font-weight: 700;
+            color: #24292e;
+            margin-bottom: 10px;
+            line-height: 1.2;
+        }
+        #embeddingForbidden .explanation-text {
+            font-size: 1rem;
+            color: #586069;
+            margin-bottom: 20px;
+            max-width: 400px; /* Constrain width for readability */
+            line-height: 1.5;
+        }
+        #embeddingForbidden .terms-link {
+            font-size: 0.9rem;
+            color: #0366d6;
+            text-decoration: none;
+            margin-top: 10px;
+            display: block;
+        }
+        #embeddingForbidden .terms-link:hover {
+            text-decoration: underline;
+        }
+        /* Message box for popup blocked */
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            text-align: center;
+            font-family: sans-serif;
+            color: #333;
+        }
+        .message-box button {
+            margin-top: 15px;
+            background-color: #007bff;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="embeddingForbidden">
+        <svg class="forbidden-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm0-4H9V7h2v6z"/>
+            <path d="M0 0h24v24H0z" fill="none"/>
+        </svg>
+        <p class="error-code-text">ERR: UNAUTHORISED_CONTENT_EMBEDDING</p>
+        <p class="main-message-text">This content cannot be displayed here.</p>
+        <p class="explanation-text">
+            Our site is protected with X-Frame-Options for security reasons.
+            This measure is enforced by the server and browser, and cannot be bypassed by proxies.
+        </p>
+        <a href="javascript:void(0)" onclick="openTermsOfServiceInjected()" class="terms-link">Terms of Service</a>
+    </div>
+
+    <div class="error-container" id="mainErrorContent">
+        <div class="error-content">
+            <!-- Offline/No Wi-Fi Icon - Server on one side, Website with X on the other -->
+            <div class="icon-container">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <!-- Server icon shape, translated to the left -->
+                    <g transform="translate(-6, 0)">
+                        <!-- Main server body -->
+                        <rect x="5" y="7" width="14" height="10" rx="1" ry="1" stroke="#586069" stroke-width="1.5" fill="none"/>
+                        <!-- Server lights/indicators -->
+                        <circle cx="7" cy="9" r="0.7" fill="#586069"/>
+                        <circle cx="9" cy="9" r="0.7" fill="#586069"/>
+                        <circle cx="7" cy="12" r="0.7" fill="#586069"/>
+                        <circle cx="9" cy="12" r="0.7" fill="#586069"/>
+                        <circle cx="7" cy="15" r="0.7" fill="#586069"/>
+                        <circle cx="9" cy="15" r="0.7" fill="#586069"/>
+                    </g>
+
+                    <!-- Group for Website and X, translated to the right -->
+                    <g transform="translate(6, 0)">
+                        <!-- Website icon (simplified rectangle) -->
+                        <rect x="7" y="10" width="10" height="7" rx="1" ry="1" fill="#ffffff" stroke="#586069" stroke-width="1.5"/>
+                        <!-- "X" mark -->
+                        <line x1="9" y1="11.5" x2="15" y2="15.5" stroke="#cb2431" stroke-width="2.5"/>
+                        <line x1="15" y1="11.5" x2="9" y2="15.5" stroke="#cb2431" stroke-width="2.5"/>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Error message section -->
+            <div class="error-message">Connection error occurred</div>
+            <!-- Sub-message providing context -->
+            <div class="sub-message">
+                A HTTP connection to the server could not be made. Please check your connection and try reloading the page.
+            </div>
+            <!-- Diagnosis Link -->
+            <a href="javascript:void(0)" onclick="openDiagnosisModal()" class="diagnosis-link">
+                Troubleshoot Connection Issues
+            </a>
+            <!-- Certificate Viewer Link -->
+            <a href="javascript:void(0)" onclick="openCertModal()" class="cert-link">
+                How to View Site Certificate
+            </a>
+            <!-- Reload button -->
+            <button class="reload-button" onclick="handleReloadButtonClick()">Reload Page</button>
+        </div>
+    </div>
+
+    <!-- The Modals -->
+    <!-- Windows Network Diagnostics Modal -->
+    <div id="diagnosisModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Troubleshoot Connection Issues</h2>
+                <span class="close-button" onclick="closeDiagnosisModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Here are some steps you can take to troubleshoot your connection:</p>
+                <ul>
+                    <li>**Turn off your modem/router** and then turn it back on after 5 seconds. Wait for it to fully restart.</li>
+                    <li><li>**Click the reset button** on your modem/router if you have one (e.g., on Sky routers).</li>
+                    <li>**Check network adapters:**
+                        <ul>
+                            <li>Go to **Start Menu**.</li>
+                            <li>Type "Network Connections" and press Enter.</li>
+                            <li>Make sure your Wi-Fi or Ethernet adapter is enabled. If not, right-click and select "Enable".</li>
+                        </ul>
+                    </li>
+                    <li>**Run Windows Network Diagnostics:**
+                        <ul>
+                            <li>Go to **Start Menu**.</li>
+                            <li>Type "Network troubleshooter" and press Enter.</li>
+                            <li>Follow the on-screen instructions to diagnose and fix network problems.</li>
+                        </ul>
+                    </li>
+                    <li>**Contact your modem/internet provider** (e.g., Sky) if the issue persists. They can help check for outages or further diagnose your connection.</li>
+                </ul>
+                <p>These steps can often help resolve common network issues.</p>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeDiagnosisModal()">Got It!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Certificate Viewer Modal -->
+    <div id="certModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>How to View Site Certificate</h2>
+                <span class="close-button" onclick="closeCertModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>To view the security certificate of a website in your browser:</p>
+                <ul>
+                    <li>Look for a **padlock icon** (🔒) in the address bar of your browser.</li>
+                    <li>Click on the **padlock icon**.</li>
+                    <li>A small window or menu will appear. Look for an option like "Connection is secure", "Certificate", or "Site information" and click on it.</li>
+                    <li>This will open the certificate details, where you can see who issued it, its validity, and other security information.</li>
+                </ul>
+                <p>Checking the certificate can help you verify if a website is secure and trustworthy.</p>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeCertModal()">Got It!</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get the modals
+        var diagnosisModal = document.getElementById("diagnosisModal");
+        var certModal = document.getElementById("certModal");
+        var mainErrorContent = document.getElementById("mainErrorContent");
+        var embeddingForbidden = document.getElementById("embeddingForbidden");
+
+        // Functions to open and close the diagnosis modal
+        function openDiagnosisModal() {
+            diagnosisModal.style.display = "flex";
+        }
+        function closeDiagnosisModal() {
+            diagnosisModal.style.display = "none";
+        }
+
+        // Functions to open and close the certificate modal
+        function openCertModal() {
+            certModal.style.display = "flex";
+        }
+        function closeCertModal() {
+            certModal.style.display = "none";
+        }
+
+        // Close modals if the user clicks anywhere outside of the modal content
+        window.onclick = function(event) {
+            if (event.target == diagnosisModal) {
+                closeDiagnosisModal();
+            } else if (event.target == certModal) {
+                closeCertModal();
+            }
+        }
+
+        // --- Embedding Check Logic ---
+        function checkEmbeddingStatus() {
+            if (window.self === window.top) { // Not in an iframe
+                return false; // Always allowed if not embedded
+            }
+
+            // If in an iframe, check if it's the Gemini Canvas environment
+            // Check for __app_id which is reliably present in Canvas
+            if (typeof __app_id !== 'undefined') {
+                return false; // Allowed (it's Gemini Canvas)
+            }
+
+            // Fallback for other potential allowed origins (though __app_id is primary)
+            const currentOrigin = window.location.origin;
+            const currentHostname = window.location.hostname;
+            const isAllowedCanvasOriginByUrl = currentOrigin.startsWith('blob:') || currentHostname.endsWith('.scf.usercontent.goog');
+
+            if (isAllowedCanvasOriginByUrl) {
+                return false; // Allowed (it's Gemini Canvas by URL pattern)
+            } else {
+                return true; // Forbidden (it's an unauthorized iframe)
+            }
+        }
+
+
+        // --- Network Status Logic ---
+        const REDIRECT_URL_KEY = 'offlineRedirectUrl';
+        const IS_BANNED_KEY = 'isBanned'; // Key for ban status in local storage
+
+        function handleNetworkStatus() {
+            // Check for ban status first
+            if (localStorage.getItem(IS_BANNED_KEY) === 'true') {
+                window.location.href = '/immersive/permanent-ban-page'; // Redirect to ban page
+                return; // Stop further execution
+            }
+
+            // Only proceed with network logic if embedding is allowed (or not in iframe)
+            if (checkEmbeddingStatus()) {
+                // If embedding is forbidden, ensure only the forbidden message is shown
+                mainErrorContent.style.display = 'none';
+                embeddingForbidden.style.display = 'flex';
+                return; // Stop further execution
+            } else {
+                // If embedding is allowed, ensure main content is visible
+                mainErrorContent.style.display = 'flex';
+                embeddingForbidden.style.display = 'none';
+            }
+
+
+            if (navigator.onLine) {
+                console.log("Online detected. Attempting to navigate...");
+                const storedUrl = localStorage.getItem(REDIRECT_URL_KEY);
+                if (storedUrl) {
+                    console.log("Redirecting to stored URL:", storedUrl);
+                    localStorage.removeItem(REDIRECT_URL_KEY); // Clear after use
+                    window.location.href = storedUrl;
+                } else {
+                    // If no stored URL and online, decide based on iframe
+                    if (window.self !== window.top) {
+                        // In an iframe (but allowed, e.g., Gemini), stay on the error page
+                        console.log("In allowed iframe, no stored URL, staying on error page.");
+                    } else {
+                        // Not in an iframe, open Google in a new tab
+                        console.log("Not in iframe, no stored URL, opening Google in new tab.");
+                        window.open('https://www.google.com', '_blank');
+                    }
+                }
+            } else {
+                console.log("Offline detected. Displaying error page.");
+                // Store the referrer if available, only if not already stored
+                if (document.referrer && document.referrer !== "" && !localStorage.getItem(REDIRECT_URL_KEY)) {
+                    console.log("Storing referrer:", document.referrer);
+                    localStorage.setItem(REDIRECT_URL_KEY, document.referrer);
+                }
+            }
+        }
+
+        // Function for the "Reload Page" button click
+        function handleReloadButtonClick() {
+            // Check for ban status first
+            if (localStorage.getItem(IS_BANNED_KEY) === 'true') {
+                window.location.href = '/immersive/permanent-ban-page'; // Redirect to ban page
+                return; // Stop further execution
+            }
+
+            if (checkEmbeddingStatus()) { // First, check embedding status
+                return; // If embedding is forbidden, stop here
+            }
+
+            if (window.self !== window.top) {
+                // In an iframe (but allowed, e.g., Gemini), reload the current iframe content
+                console.log("Reload button clicked in allowed iframe, reloading current page.");
+                location.reload();
+            } else {
+                // Not in an iframe, open Google in a new tab
+                console.log("Reload button clicked not in iframe, opening Google in new tab.");
+                window.open('https://www.google.com', '_blank');
+            }
+        }
+
+        // Function to open the Terms of Service page by injecting HTML into about:blank
+        function openTermsOfServiceInjected() {
+            const newWindow = window.open('about:blank', '_blank');
+
+            if (newWindow) {
+                const termsHtmlContent = `
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Terms of Service - Embedding Policy</title>
+                        <style>
+                            body {
+                                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                                background-color: #f6f8fa;
+                                color: #24292e;
+                                line-height: 1.6;
+                                padding: 40px;
+                                max-width: 800px;
+                                margin: 0 auto;
+                                box-sizing: border-box;
+                            }
+                            h1 {
+                                font-size: 2.2rem;
+                                color: #24292e;
+                                margin-bottom: 20px;
+                                border-bottom: 1px solid #e1e4e8;
+                                padding-bottom: 10px;
+                            }
+                            h2 {
+                                font-size: 1.5rem;
+                                color: #24292e;
+                                margin-top: 30px;
+                                margin-bottom: 15px;
+                            }
+                            p {
+                                margin-bottom: 15px;
+                            }
+                            strong {
+                                color: #cb2431; /* Highlight important terms */
+                            }
+                            .error-code {
+                                font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+                                background-color: #f0f0f0;
+                                padding: 2px 5px;
+                                border-radius: 3px;
+                                font-size: 0.9em;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Terms of Service - Embedding Policy</h1>
+
+                        <p>Welcome to our service. These terms outline the conditions under which our content may be accessed and used. By accessing or using our service, you agree to comply with these terms.</p>
+
+                        <h2>Section 1: Content Embedding Policy</h2>
+                        <p>Our website and its content are designed for direct access and use. To maintain security, ensure content integrity, and protect our users, we implement strict policies regarding the embedding of our pages within other websites (iframes).</p>
+
+                        <h3>1.1 Unauthorized Embedding</h3>
+                        <p>Any attempt to embed our content, or portions thereof, within an iframe on a domain not explicitly authorized by us is strictly prohibited. Unauthorized embedding constitutes a violation of these terms of service.</p>
+
+                        <h3>1.2 Security Measures</h3>
+                        <p>To enforce this policy, our site utilizes security headers, including <strong>X-Frame-Options</strong>. This server-side and browser-enforced measure prevents our content from being loaded in unauthorized iframes. This protection is robust and <strong>cannot be bypassed by proxies or other means</strong>.</p>
+
+                        <h3>1.3 Associated Error Codes</h3>
+                        <p>Users attempting unauthorized embedding or violating our terms may encounter browser-level security errors, typically indicated by codes such as: <span class="error-code">UNAUTHORISED_CONTENT_EMBEDDING</span> or <span class="error-code">TERMS_OF_SERVICE_VIOLATION</span>. These errors signify that the page you tried to access is protected via our client servers and Chrome's web server, actively blocking the embedding attempt in compliance with our security directives.</p>
+
+                        <h3>1.4 Consequences of Violation</h3>
+                        <p>Violation of this embedding policy, including <strong>any system misuse or attempts at clickjacking</strong>, may result in restricted access to our services, legal action, or other remedies available to us under applicable law. This could also lead to a <strong>permanent ban page</strong> being displayed whenever attempts are made to access our content via iframes on the same site, or even when opening our content directly in a new browser tab.</p>
+
+                        <h2>Section 2: General Terms</h2>
+                        <p>...</p> <!-- Placeholder for other general terms -->
+
+                        <p>For any questions regarding these terms, please contact us.</p>
+                    </body>
+                    </html>
+                `;
+                newWindow.document.write(termsHtmlContent);
+                newWindow.document.close();
+            } else {
+                // Fallback if popup is blocked
+                const messageBox = document.createElement('div');
+                messageBox.className = 'message-box';
+                messageBox.innerHTML = `
+                    <p>Popup blocked! Please allow popups for this site to see the Terms of Service.</p>
+                    <button onclick="this.parentNode.remove()">OK</button>
+                `;
+                document.body.appendChild(messageBox);
+            }
+        }
+
+        // Initial checks on load
+        handleNetworkStatus(); // Call this once to set initial display and check network
+
+        // Listen for network changes
+        window.addEventListener('online', handleNetworkStatus);
+        window.addEventListener('offline', handleNetworkStatus);
+
+        // --- FOR DEMONSTRATION ONLY ---
+        // You can uncomment this line and run the code to simulate a ban.
+        // In a real application, this flag would be set by your server-side logic
+        // based on user violations.
+        // localStorage.setItem(IS_BANNED_KEY, 'true');
+        // --- END DEMONSTRATION ---
+    </script>
+</body>
+</html>
